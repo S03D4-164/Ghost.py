@@ -197,7 +197,7 @@ class HttpResource(object):
         self.http_status = reply.attribute(
             QNetworkRequest.HttpStatusCodeAttribute)
         self.session.logger.info(
-            "Resource loaded: %s %s" % (self.url, self.http_status)
+            "Resource loaded: %s %s %s" % (self.url, self.http_status, len(self.content))
         )
         self.headers = {}
         for header in reply.rawHeaderList():
@@ -245,13 +245,20 @@ class NetworkAccessManager(QNetworkAccessManager):
             request,
             data
         )
-        reply.readyRead.connect(lambda reply=reply: replyReadyRead(reply))
+	reply.readyRead.connect(lambda reply=reply: replyReadyRead(reply))
 	reply.error.connect(self._reply_error)
+	if self.logger.isEnabledFor(logging.DEBUG):
+	        reply.downloadProgress.connect(self._reply_download_progress)
         time.sleep(0.001)
         return reply
 
     def _reply_error(self, arg):
         self.logger.error("Reply error: %s" % arg)
+
+    def _reply_download_progress(self, sent, total):
+        self.logger.debug("Download Progress: %s sent / %s total" % (sent, total))
+        time.sleep(0.1)
+
 
 class Ghost(object):
     """`Ghost` manages a Qt application.
@@ -466,7 +473,6 @@ class Session(object):
                 QtWebKit.QWebSettings.JavaEnabled, True)
 
         self.webview.setPage(self.page)
-
         if self.display:
             self.show()
 
@@ -721,7 +727,7 @@ class Session(object):
         del self.cookie_jar
         del self.manager
         del self.main_frame
-        self.page.deleteLater()
+	self.page.deleteLater()
         self.sleep()
 
     @can_load_page
@@ -1198,6 +1204,7 @@ class Session(object):
         """
         self.wait_for(lambda: self.loaded,
                       'Unable to load requested page', timeout)
+        self.sleep(1)
         resources = self._release_last_resources()
         page = None
 
@@ -1267,7 +1274,6 @@ class Session(object):
         """Called back when page is loaded.
         """
         self.loaded = True
-        self.sleep()
 
     def _page_load_started(self):
         """Called back when page load started.
@@ -1280,6 +1286,7 @@ class Session(object):
         :return: The released resources.
         """
         last_resources = self.http_resources
+	self.logger.info(str(len(last_resources)) + " resources loaded.")
         self.http_resources = []
         return last_resources
 
@@ -1288,7 +1295,6 @@ class Session(object):
 
         :param reply: The QNetworkReply object.
         """
-
         if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
             self.logger.debug("[%s] bytesAvailable()= %s" % (
                 str(reply.url()),
@@ -1310,9 +1316,13 @@ class Session(object):
         self.logger.info("Unsupported content %s" % (
             str(reply.url()),
         ))
-
+	reply.readyRead.disconnect(replyReadyRead(reply))
+        if hasattr(reply, 'data'):
+                reply.data = ''
         reply.readyRead.connect(
             lambda reply=reply: self._reply_download_content(reply))
+        while reply.isRunning():
+            self.sleep()
 
     def _reply_download_content(self, reply):
         """Adds an HttpResource object to http_resources with unsupported
@@ -1321,11 +1331,14 @@ class Session(object):
         :param reply: The QNetworkReply object.
         """
         if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
+	    reply.data = reply.data + reply.readAll()
+	    """
             self.http_resources.append(HttpResource(
                 self,
                 reply,
                 reply.readAll(),
             ))
+	    """
 
     def _on_manager_ssl_errors(self, reply, errors):
         url = unicode(reply.url().toString())
