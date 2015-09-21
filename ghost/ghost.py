@@ -1301,16 +1301,24 @@ class Session(object):
                 reply.bytesAvailable()
             ))
 
+	    content = None
             try:
                 content = reply.data
             except AttributeError:
                 content = reply.readAll()
+
+            if hasattr(reply, "cache"):
+                with open(reply.cache, "rb") as c:
+                    content = c.read()
 
             self.http_resources.append(HttpResource(
                 self,
                 reply,
                 content=content,
             ))
+
+            if hasattr(reply, "cache"):
+	        os.remove(reply.cache)
 
     def _unsupported_content(self, reply):
         self.logger.info("Unsupported content %s" % (
@@ -1319,6 +1327,12 @@ class Session(object):
 	reply.readyRead.disconnect(replyReadyRead(reply))
         if hasattr(reply, 'data'):
                 reply.data = ''
+	cachedir = "/tmp/Ghost.cache/"
+	if not os.path.exists(cachedir):
+		os.makedirs(cachedir)
+	reply.cache = cachedir + str(uuid.uuid1())
+	self.logger.debug(reply.cache)
+	
         reply.readyRead.connect(
             lambda reply=reply: self._reply_download_content(reply))
         while reply.isRunning():
@@ -1331,7 +1345,9 @@ class Session(object):
         :param reply: The QNetworkReply object.
         """
         if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
-	    reply.data = reply.data + reply.readAll()
+	    #reply.data = reply.data + reply.readAll()
+	    with open(reply.cache, "a") as c:
+			c.write(reply.readAll())
 	    """
             self.http_resources.append(HttpResource(
                 self,
