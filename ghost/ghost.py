@@ -214,7 +214,7 @@ class HttpResource(object):
                     )
                 )
         self._reply = reply
-
+	self.error = unicode(reply.error())
 
 def replyReadyRead(reply):
     if not hasattr(reply, 'data'):
@@ -232,7 +232,7 @@ class NetworkAccessManager(QNetworkAccessManager):
     def __init__(self, exclude_regex=None, logger=None, *args, **kwargs):
         self._regex = re.compile(exclude_regex) if exclude_regex else None
 	self.logger = logger
-        super(self.__class__, self).__init__(*args, **kwargs)
+	super(NetworkAccessManager, self).__init__(*args, **kwargs)
 
     def createRequest(self, operation, request, data):
         if self._regex and self._regex.findall(str(request.url().toString())):
@@ -253,7 +253,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         return reply
 
     def _reply_error(self, arg):
-        self.logger.error("Reply error: %s" % arg)
+        #self.logger.error("Reply error: %s" % arg)
+	self.error = arg
 
     def _reply_download_progress(self, sent, total):
         self.logger.debug("Download Progress: %s sent / %s total" % (sent, total))
@@ -1206,6 +1207,8 @@ class Session(object):
                       'Unable to load requested page', timeout)
         self.sleep(1)
         resources = self._release_last_resources()
+	#if not resources:
+        #    	raise Error(self.manager.error)
         page = None
 
         url = self.main_frame.url().toString()
@@ -1295,7 +1298,10 @@ class Session(object):
 
         :param reply: The QNetworkReply object.
         """
-        if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
+	#print dir(reply)
+	self.logger.debug(str(reply.url()))
+        #if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
+        if reply.rawHeaderList():
             self.logger.debug("[%s] bytesAvailable()= %s" % (
                 str(reply.url()),
                 reply.bytesAvailable()
@@ -1319,6 +1325,16 @@ class Session(object):
 
             if hasattr(reply, "cache"):
 	        os.remove(reply.cache)
+	else:
+            self.logger.debug("[%s] reply error : %s" % (
+                str(reply.url()),
+                str(reply.error()),
+            ))
+            self.http_resources.append(HttpResource(
+                self,
+                reply,
+                content=None,
+            ))
 
     def _unsupported_content(self, reply):
         self.logger.info("Unsupported content %s" % (
