@@ -189,11 +189,12 @@ class HttpResource(object):
     def __init__(self, session, reply, content):
         self.session = session
         self.url = reply.url().toString()
-        self.content = content
-        try:
-            self.content = unicode(content)
-        except UnicodeDecodeError:
-            self.content = content
+        self.content = ""
+        if content:
+            try:
+                self.content = unicode(content)
+            except UnicodeDecodeError:
+                self.content = content
         self.http_status = reply.attribute(
             QNetworkRequest.HttpStatusCodeAttribute)
         self.session.logger.info(
@@ -214,7 +215,7 @@ class HttpResource(object):
                     )
                 )
         self._reply = reply
-	self.error = unicode(reply.error())
+        self.error = unicode(reply.error())
 
 def replyReadyRead(reply):
     if not hasattr(reply, 'data'):
@@ -231,8 +232,8 @@ class NetworkAccessManager(QNetworkAccessManager):
     """
     def __init__(self, exclude_regex=None, logger=None, *args, **kwargs):
         self._regex = re.compile(exclude_regex) if exclude_regex else None
-	self.logger = logger
-	super(NetworkAccessManager, self).__init__(*args, **kwargs)
+        self.logger = logger
+        super(NetworkAccessManager, self).__init__(*args, **kwargs)
 
     def createRequest(self, operation, request, data):
         if self._regex and self._regex.findall(str(request.url().toString())):
@@ -245,16 +246,16 @@ class NetworkAccessManager(QNetworkAccessManager):
             request,
             data
         )
-	reply.readyRead.connect(lambda reply=reply: replyReadyRead(reply))
-	reply.error.connect(self._reply_error)
-	if self.logger.isEnabledFor(logging.DEBUG):
-	        reply.downloadProgress.connect(self._reply_download_progress)
+        reply.readyRead.connect(lambda reply=reply: replyReadyRead(reply))
+        reply.error.connect(self._reply_error)
+        if self.logger.isEnabledFor(logging.DEBUG):
+            reply.downloadProgress.connect(self._reply_download_progress)
         time.sleep(0.001)
         return reply
 
     def _reply_error(self, arg):
         #self.logger.error("Reply error: %s" % arg)
-	self.error = arg
+        self.error = arg
 
     def _reply_download_progress(self, sent, total):
         self.logger.debug("Download Progress: %s sent / %s total" % (sent, total))
@@ -728,7 +729,7 @@ class Session(object):
         del self.cookie_jar
         del self.manager
         del self.main_frame
-	self.page.deleteLater()
+        self.page.deleteLater()
         self.sleep()
 
     @can_load_page
@@ -1207,8 +1208,6 @@ class Session(object):
                       'Unable to load requested page', timeout)
         self.sleep(1)
         resources = self._release_last_resources()
-	#if not resources:
-        #    	raise Error(self.manager.error)
         page = None
 
         url = self.main_frame.url().toString()
@@ -1289,7 +1288,7 @@ class Session(object):
         :return: The released resources.
         """
         last_resources = self.http_resources
-	self.logger.info(str(len(last_resources)) + " resources loaded.")
+        self.logger.info(str(len(last_resources)) + " resources loaded.")
         self.http_resources = []
         return last_resources
 
@@ -1298,8 +1297,7 @@ class Session(object):
 
         :param reply: The QNetworkReply object.
         """
-	#print dir(reply)
-	self.logger.debug(str(reply.url()))
+        self.logger.debug(str(reply.url()))
         #if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
         if reply.rawHeaderList():
             self.logger.debug("[%s] bytesAvailable()= %s" % (
@@ -1307,7 +1305,7 @@ class Session(object):
                 reply.bytesAvailable()
             ))
 
-	    content = None
+            content = None
             try:
                 content = reply.data
             except AttributeError:
@@ -1324,8 +1322,8 @@ class Session(object):
             ))
 
             if hasattr(reply, "cache"):
-	        os.remove(reply.cache)
-	else:
+                os.remove(reply.cache)
+        else:
             self.logger.debug("[%s] reply error : %s" % (
                 str(reply.url()),
                 str(reply.error()),
@@ -1340,15 +1338,15 @@ class Session(object):
         self.logger.info("Unsupported content %s" % (
             str(reply.url()),
         ))
-	reply.readyRead.disconnect(replyReadyRead(reply))
+        reply.readyRead.disconnect(replyReadyRead(reply))
         if hasattr(reply, 'data'):
                 reply.data = ''
-	cachedir = "/tmp/Ghost.cache/"
-	if not os.path.exists(cachedir):
-		os.makedirs(cachedir)
-	reply.cache = cachedir + str(uuid.uuid1())
-	self.logger.debug(reply.cache)
-	
+        cachedir = "/tmp/Ghost.cache/"
+        if not os.path.exists(cachedir):
+            os.makedirs(cachedir)
+        reply.cache = cachedir + str(uuid.uuid1())
+        self.logger.debug(reply.cache)
+
         reply.readyRead.connect(
             lambda reply=reply: self._reply_download_content(reply))
         while reply.isRunning():
@@ -1360,17 +1358,17 @@ class Session(object):
 
         :param reply: The QNetworkReply object.
         """
+        if reply.rawHeaderList():
+            with open(reply.cache, "a") as c:
+                c.write(reply.readAll())
+        """
         if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute):
-	    #reply.data = reply.data + reply.readAll()
-	    with open(reply.cache, "a") as c:
-			c.write(reply.readAll())
-	    """
             self.http_resources.append(HttpResource(
                 self,
                 reply,
                 reply.readAll(),
             ))
-	    """
+        """
 
     def _on_manager_ssl_errors(self, reply, errors):
         url = unicode(reply.url().toString())
