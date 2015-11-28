@@ -194,7 +194,7 @@ class HttpResource(object):
             try:
                 self.content = unicode(content)
             except UnicodeDecodeError:
-                self.content = content
+                self.content = content.data()
         self.http_status = reply.attribute(
             QNetworkRequest.HttpStatusCodeAttribute)
         self.session.logger.info(
