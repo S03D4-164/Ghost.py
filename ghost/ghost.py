@@ -1188,7 +1188,8 @@ class Session(object):
         started_at = time.time()
         while not condition():
             if time.time() > (started_at + timeout):
-                raise TimeoutError(timeout_message)
+                return
+                #raise TimeoutError(timeout_message)
             self.sleep()
             if self.wait_callback is not None:
                 self.wait_callback()
