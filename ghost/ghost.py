@@ -194,7 +194,11 @@ class HttpResource(object):
             try:
                 self.content = unicode(content)
             except UnicodeDecodeError:
-                self.content = content.data()
+                try:
+                    self.content = content.data()
+                except AttributeError:
+                    self.content = content
+                    
         self.http_status = reply.attribute(
             QNetworkRequest.HttpStatusCodeAttribute)
         self.session.logger.info(
@@ -1306,14 +1310,19 @@ class Session(object):
             ))
 
             content = None
-            try:
-                content = reply.data
-            except AttributeError:
-                content = reply.readAll()
 
-            if hasattr(reply, "cache"):
+            try:
                 with open(reply.cache, "rb") as c:
                     content = c.read()
+                    os.remove(reply.cache)
+            except:
+                try:
+                    content = reply.data
+                except AttributeError:
+                    content = reply.readAll()
+
+            if not content:
+                    content = reply.readAll()
 
             self.http_resources.append(HttpResource(
                 self,
@@ -1321,8 +1330,6 @@ class Session(object):
                 content=content,
             ))
 
-            if hasattr(reply, "cache"):
-                os.remove(reply.cache)
         else:
             self.logger.debug("[%s] reply error : %s" % (
                 str(reply.url()),
