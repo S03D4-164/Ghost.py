@@ -897,6 +897,7 @@ class Session(object):
             QSslConfiguration.setDefaultConfiguration(ssl_conf)
 
         if encode_url:
+            address = QString.fromUtf8(address)
             request = QNetworkRequest(QUrl(address))
         else:
             request = QNetworkRequest(QUrl.fromEncoded(address))
